@@ -1,22 +1,27 @@
 import io
 import json
 import os
-import re
 from pathlib import Path
 
-import anthropic
-import httpx
+import google.generativeai as genai
 import pdfplumber
-from bs4 import BeautifulSoup
-from fastapi import FastAPI, File, Form, HTTPException, Query, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse, StreamingResponse
 
 app = FastAPI()
-client = anthropic.Anthropic()  # automatically reads ANTHROPIC_API_KEY
 
 SYSTEM_PROMPT = """You are an expert career coach and professional resume writer with deep knowledge of how applicant tracking systems (ATS) work and what hiring managers look for.
 
 Your job is to help software engineering candidates tailor their application materials to a specific job description. Be specific, honest, and actionable. Focus on what will actually get someone past the resume screen."""
+
+
+def get_model():
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("GOOGLE_API_KEY not set")
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel("gemini-2.5-flash", system_instruction=SYSTEM_PROMPT)
+
 
 def extract_pdf_text(pdf_bytes: bytes) -> str:
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
@@ -38,8 +43,8 @@ async def tailor(
     resume: UploadFile = File(...),
     job_description: str = Form(...),
 ):
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not set. Export it in your terminal before running.")
+    if not os.environ.get("GOOGLE_API_KEY"):
+        raise HTTPException(status_code=500, detail="GOOGLE_API_KEY not set. Export it in your terminal before running.")
 
     if not job_description.strip():
         raise HTTPException(status_code=400, detail="Job description cannot be empty.")
@@ -76,22 +81,18 @@ JOB DESCRIPTION:
 
     async def stream_response():
         try:
-            with client.messages.stream(
-                model="claude-opus-4-8",
-                max_tokens=4000,
-                thinking={"type": "adaptive"},
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_message}],
-            ) as stream:
-                for text in stream.text_stream:
-                    yield f"data: {json.dumps({'text': text})}\n\n"
+            model = get_model()
+            response = await model.generate_content_async(
+                user_message,
+                stream=True,
+                generation_config=genai.GenerationConfig(max_output_tokens=4000),
+            )
+            async for chunk in response:
+                if chunk.text:
+                    yield f"data: {json.dumps({'text': chunk.text})}\n\n"
             yield "data: [DONE]\n\n"
-        except anthropic.AuthenticationError:
-            yield f"data: {json.dumps({'error': 'Invalid API key. Check your ANTHROPIC_API_KEY.'})}\n\n"
-        except anthropic.RateLimitError:
-            yield f"data: {json.dumps({'error': 'Rate limit hit. Wait a moment and try again.'})}\n\n"
-        except anthropic.BadRequestError as e:
-            yield f"data: {json.dumps({'error': f'Bad request: {e}'})}\n\n"
+        except ValueError as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': f'Something went wrong: {e}'})}\n\n"
 
