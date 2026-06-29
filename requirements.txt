@@ -1,0 +1,8 @@
+anthropic
+fastapi
+uvicorn[standard]
+pdfplumber
+python-multipart
+httpx
+beautifulsoup4
+lxml

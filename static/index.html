@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Job Application Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #22263a;
+      --border: #2e3347;
+      --accent: #6c8eff;
+      --accent-glow: rgba(108,142,255,0.15);
+      --green: #3dd68c;
+      --green-dim: rgba(61,214,140,0.12);
+      --yellow: #f5c542;
+      --red: #ff6b6b;
+      --text: #e8eaf6;
+      --text-dim: #8b90a8;
+      --radius: 12px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), #a78bfa);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+    }
+
+    header h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+    header span { font-size: 13px; color: var(--text-dim); margin-left: 4px; }
+
+    .main {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .panel-left {
+      padding: 28px 24px;
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    .panel-right {
+      padding: 28px 32px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+    }
+
+    /* Drop zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 28px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .drop-zone:hover, .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-glow);
+    }
+    .drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .drop-zone .icon { font-size: 28px; margin-bottom: 8px; }
+    .drop-zone .hint { font-size: 13px; color: var(--text-dim); }
+    .drop-zone .hint strong { color: var(--accent); }
+    .drop-zone .filename {
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--green);
+      font-weight: 500;
+      display: none;
+    }
+
+    textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 13px;
+      line-height: 1.6;
+      padding: 14px;
+      resize: vertical;
+      font-family: inherit;
+      transition: border-color 0.2s;
+      min-height: 220px;
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    textarea::placeholder { color: var(--text-dim); }
+
+    .btn {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--accent), #7c6eff);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      letter-spacing: -0.2px;
+    }
+    .btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+    .btn:active:not(:disabled) { transform: translateY(0); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    .spinner {
+      width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Results */
+    .empty-state {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-dim);
+    }
+    .empty-state .big-icon { font-size: 48px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; text-align: center; max-width: 260px; line-height: 1.6; }
+
+    .result-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      display: none;
+    }
+    .result-section.visible { display: block; }
+
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+    .section-title {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px; font-weight: 600;
+    }
+    .section-icon { font-size: 16px; }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .copy-btn.copied { border-color: var(--green); color: var(--green); }
+
+    .section-body {
+      padding: 18px;
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    /* Match score special */
+    .score-display {
+      padding: 24px 18px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .score-circle {
+      width: 80px; height: 80px;
+      border-radius: 50%;
+      border: 4px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; font-weight: 700;
+      flex-shrink: 0;
+      position: relative;
+      overflow: hidden;
+    }
+    .score-circle::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(var(--score-color, var(--accent)) var(--score-pct, 0%), transparent 0%);
+      opacity: 0.2;
+    }
+    .score-text-body { font-size: 13px; line-height: 1.65; color: var(--text); }
+
+    .typing-cursor {
+      display: inline-block;
+      width: 2px;
+      height: 1em;
+      background: var(--accent);
+      margin-left: 2px;
+      vertical-align: text-bottom;
+      animation: blink 0.8s step-end infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .error-bar {
+      background: rgba(255,107,107,0.1);
+      border: 1px solid var(--red);
+      border-radius: var(--radius);
+      padding: 14px 18px;
+      font-size: 13px;
+      color: var(--red);
+      display: none;
+    }
+    .error-bar.visible { display: block; }
+
+    @media (max-width: 860px) {
+      .main { grid-template-columns: 1fr; }
+      .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">&#127919;</div>
+  <div>
+    <h1>Job Application Agent <span>/ CV Tailor</span></h1>
+  </div>
+</header>
+
+<div class="main">
+  <!-- LEFT: Inputs -->
+  <div class="panel-left">
+    <div>
+      <label>Your Resume (PDF)</label>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="resumeFile" accept=".pdf" />
+        <div class="icon">&#128196;</div>
+        <div class="hint">Drop your PDF here or <strong>click to browse</strong></div>
+        <div class="filename" id="filename"></div>
+      </div>
+    </div>
+
+    <div>
+      <label>Job Description</label>
+      <textarea
+        id="jobDesc"
+        placeholder="Paste the full job description here — the more detail the better. Include the role, responsibilities, requirements, and company info."
+      ></textarea>
+    </div>
+
+    <div class="error-bar" id="errorBar"></div>
+
+    <button class="btn" id="tailorBtn" onclick="tailor()">
+      <span class="spinner" id="spinner"></span>
+      <span id="btnText">&#9889; Tailor My Application</span>
+    </button>
+  </div>
+
+  <!-- RIGHT: Results -->
+  <div class="panel-right" id="panelRight">
+
+    <div class="empty-state" id="emptyState">
+      <div class="big-icon">&#128203;</div>
+      <p>Upload your resume and paste a job description, then hit <strong>Tailor My Application</strong>.</p>
+    </div>
+
+    <!-- Match Score -->
+    <div class="result-section" id="scoreSection">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">&#127919;</span> Match Score
+        </div>
+        <button class="copy-btn" onclick="copySection('scoreContent', this)">Copy</button>
+      </div>
+      <div class="score-display">
+        <div class="score-circle" id="scoreCircle">
+          <span id="scoreNumber">—</span>
+        </div>
+        <div class="score-text-body" id="scoreContent"></div>
+      </div>
+    </div>
+
+    <!-- Tailored Bullets -->
+    <div class="result-section" id="bulletsSection">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">&#10003;</span> Tailored Resume Bullets
+        </div>
+        <button class="copy-btn" onclick="copySection('bulletsContent', this)">Copy</button>
+      </div>
+      <div class="section-body" id="bulletsContent"></div>
+    </div>
+
+    <!-- Cover Letter -->
+    <div class="result-section" id="coverSection">
+      <div class="section-header">
+        <div class="section-title">
+          <span class="section-icon">&#9993;</span> Cover Letter
+        </div>
+        <button class="copy-btn" onclick="copySection('coverContent', this)">Copy</button>
+      </div>
+      <div class="section-body" id="coverContent"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // File drop handling
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('resumeFile');
+  const filenameEl = document.getElementById('filename');
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) {
+      filenameEl.textContent = '✓ ' + fileInput.files[0].name;
+      filenameEl.style.display = 'block';
+    }
+  });
+
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === 'application/pdf') {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.files = dt.files;
+      filenameEl.textContent = '✓ ' + file.name;
+      filenameEl.style.display = 'block';
+    }
+  });
+
+  // Streaming state
+  let rawText = '';
+  let currentSection = null;
+
+  function resetUI() {
+    rawText = '';
+    currentSection = null;
+    document.getElementById('emptyState').style.display = 'none';
+    ['scoreSection', 'bulletsSection', 'coverSection'].forEach(id => {
+      document.getElementById(id).classList.remove('visible');
+    });
+    ['scoreContent', 'bulletsContent', 'coverContent'].forEach(id => {
+      document.getElementById(id).textContent = '';
+    });
+    document.getElementById('scoreNumber').textContent = '—';
+    document.getElementById('scoreCircle').style.setProperty('--score-pct', '0%');
+    document.getElementById('errorBar').classList.remove('visible');
+  }
+
+  function showError(msg) {
+    const bar = document.getElementById('errorBar');
+    bar.textContent = msg;
+    bar.classList.add('visible');
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('tailorBtn');
+    const spinner = document.getElementById('spinner');
+    const btnText = document.getElementById('btnText');
+    btn.disabled = loading;
+    spinner.style.display = loading ? 'block' : 'none';
+    btnText.textContent = loading ? 'Analysing...' : '⚡ Tailor My Application';
+  }
+
+  // Parse streaming text into sections
+  function processChunk(chunk) {
+    rawText += chunk;
+
+    // Detect section transitions
+    const scoreMatch = rawText.indexOf('## MATCH SCORE');
+    const bulletsMatch = rawText.indexOf('## TAILORED RESUME BULLETS');
+    const coverMatch = rawText.indexOf('## COVER LETTER');
+
+    if (scoreMatch !== -1) {
+      document.getElementById('scoreSection').classList.add('visible');
+      document.getElementById('emptyState').style.display = 'none';
+    }
+    if (bulletsMatch !== -1) {
+      document.getElementById('bulletsSection').classList.add('visible');
+    }
+    if (coverMatch !== -1) {
+      document.getElementById('coverSection').classList.add('visible');
+    }
+
+    // Extract content for each section
+    function extractSection(text, header, nextHeaders) {
+      const start = text.indexOf(header);
+      if (start === -1) return '';
+      let end = text.length;
+      for (const h of nextHeaders) {
+        const pos = text.indexOf(h, start + header.length);
+        if (pos !== -1 && pos < end) end = pos;
+      }
+      return text.slice(start + header.length, end).trim();
+    }
+
+    const scoreText = extractSection(rawText, '## MATCH SCORE', ['## TAILORED RESUME BULLETS', '## COVER LETTER']);
+    const bulletsText = extractSection(rawText, '## TAILORED RESUME BULLETS', ['## COVER LETTER']);
+    const coverText = extractSection(rawText, '## COVER LETTER', []);
+
+    // Update score display
+    if (scoreText) {
+      const numMatch = scoreText.match(/\b(\d{1,3})\b/);
+      if (numMatch) {
+        const score = Math.min(100, parseInt(numMatch[1]));
+        const scoreNumEl = document.getElementById('scoreNumber');
+        scoreNumEl.textContent = score;
+        const circle = document.getElementById('scoreCircle');
+        const pct = (score / 100 * 360) + 'deg';
+        let color = score >= 75 ? 'var(--green)' : score >= 50 ? 'var(--yellow)' : 'var(--red)';
+        circle.style.setProperty('--score-color', color);
+        circle.style.setProperty('--score-pct', pct);
+        scoreNumEl.style.color = color;
+      }
+      // Show explanation (text after the score line)
+      const lines = scoreText.split('\n');
+      const explanationLines = lines.filter(l => !l.match(/^\*?\*?score\*?\*?:?\s*\d/i));
+      document.getElementById('scoreContent').textContent = explanationLines.join('\n').trim();
+    }
+
+    if (bulletsText) {
+      document.getElementById('bulletsContent').textContent = bulletsText;
+    }
+    if (coverText) {
+      document.getElementById('coverContent').textContent = coverText;
+    }
+  }
+
+  async function tailor() {
+    const file = fileInput.files[0];
+    const jd = document.getElementById('jobDesc').value.trim();
+
+    if (!file) { showError('Please upload your resume PDF first.'); return; }
+    if (!jd) { showError('Please paste the job description.'); return; }
+
+    resetUI();
+    setLoading(true);
+
+    const formData = new FormData();
+    formData.append('resume', file);
+    formData.append('job_description', jd);
+
+    try {
+      const response = await fetch('/tailor', { method: 'POST', body: formData });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        showError(err.detail || 'Server error');
+        setLoading(false);
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') { setLoading(false); continue; }
+          try {
+            const data = JSON.parse(payload);
+            if (data.error) {
+              showError(data.error);
+              setLoading(false);
+              return;
+            }
+            if (data.text) processChunk(data.text);
+          } catch (_) {}
+        }
+      }
+    } catch (e) {
+      showError('Connection error: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function copySection(elementId, btn) {
+    const text = document.getElementById(elementId).textContent;
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
+  // Allow Ctrl+Enter to submit
+  document.getElementById('jobDesc').addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 'Enter') tailor();
+  });
+</script>
+
+</body>
+</html>
